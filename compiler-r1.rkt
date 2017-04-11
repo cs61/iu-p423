@@ -177,15 +177,45 @@
     [else `(,e)]))
 
 (define (print-x86 e)
-  #f)
+  (define (arg->str arg)
+    (match arg
+      [`(int ,e) (format "$~a" e)]
+      [`(reg ,register) (format "%~a" register)]
+      [`(deref ,register ,int) (format "~a(%~a)" int register)]
+      [else (format "~a" arg)]))
+  (match e
+    [`(program (,size) ,instrs ...)
+     (let* ([str-lst (map print-x86 instrs)]
+            [start (format ".globl main\nmain:\npushq %rbp\nmovq %rsp, %rbp\nsubq $~a, %rsp\n" size)]
+            [end (format "addq $~a, %rsp\npopq %rbp\nmovq $0, %rax\nretq\n" size)]
+            [body (foldr string-append "" str-lst)])
+       (format "~a~amovq %rax, %rdi \ncallq print_int\n~a" start body end))]
+    [`(,op ,arg1 ,arg2)
+     (format "~a ~a, ~a\n" op (arg->str arg1) (arg->str arg2))]
+    [`(,op ,arg)
+     (format "~a ~a\n" op (arg->str arg))]))
+
+;; (display (print-x86 '(program
+;;              (24)
+;;              (movq (int 14) (deref rbp -8))
+;;              (movq (deref rbp -8) (reg rax))
+;;              (movq (reg rax) (deref rbp -16))
+;;              (movq (deref rbp -8) (reg rax))
+;;              (addq (reg rax) (deref rbp -16))
+;;              (movq (deref rbp -16) (reg rax))
+;;              (movq (reg rax) (deref rbp -24))
+;;              (movq (deref rbp -8) (reg rax))
+;;              (addq (reg rax) (deref rbp -24))
+;;              (movq (deref rbp -24) (reg rax)))))
 
 ;; Define the passes to be used by interp-tests and the grader
 ;; Note that your compiler file (or whatever file provides your passes)
 ;; should be named "compiler.rkt"
 (define r1-passes
   `(("uniquify" ,(uniquify '()) ,interp-scheme)
-    ("flatten" ,flatten, interp-C)
-    ("select-instructions" ,select-instr, interp-x86)
-    ("assign-homes" ,assign-homes, interp-x86)
-    ("patch-instr" ,patch-instr, interp-x86)
+    ("flatten" ,flatten ,interp-C)
+    ("select-instructions" ,select-instr ,interp-x86)
+    ("assign-homes" ,assign-homes ,interp-x86)
+    ("patch-instr" ,patch-instr ,interp-x86)
+    ("print-x86" ,print-x86 #f)
     ))
